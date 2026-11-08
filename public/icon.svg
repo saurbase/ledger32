@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#0a0a0a"/>
+  <!-- open book (left page solid, right page lighter) -->
+  <path d="M150 138h120v236H162a12 12 0 0 1-12-12V138Z" fill="#ffffff"/>
+  <path d="M270 138h92a12 12 0 0 1 12 12v224a12 12 0 0 1-12 12h-92V138Z" fill="#ffffff" fill-opacity="0.78"/>
+  <!-- orange ledger lines on left page -->
+  <rect x="174" y="184" width="72" height="14" rx="7" fill="#f97316"/>
+  <rect x="174" y="214" width="72" height="14" rx="7" fill="#f97316" fill-opacity="0.7"/>
+  <rect x="174" y="244" width="52" height="14" rx="7" fill="#f97316" fill-opacity="0.5"/>
+  <!-- orange ledger lines on right page -->
+  <rect x="294" y="184" width="64" height="14" rx="7" fill="#f97316" fill-opacity="0.55"/>
+  <rect x="294" y="214" width="64" height="14" rx="7" fill="#f97316" fill-opacity="0.4"/>
+  <!-- orange equity bar -->
+  <rect x="174" y="300" width="164" height="18" rx="9" fill="#f97316"/>
+  <!-- book spine shadow -->
+  <rect x="268" y="138" width="4" height="236" fill="#0a0a0a" fill-opacity="0.15"/>
+</svg>

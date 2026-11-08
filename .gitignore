@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# build output / packaging artifacts
+dist-electron/
+.next/
+out/
+build/
+
+# logs
+dev.log
+server.log
+*.log
+
+# env / local data
+.env
+.env.local
+data/
+db/
+download/
+
+# OS / editor
+.DS_Store
+Thumbs.db

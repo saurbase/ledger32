@@ -9,9 +9,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useUiStore } from "@/lib/ui-store"
-import { SHORTCUTS, formatKeys } from "./shortcuts"
-
-const GROUP_ORDER = ["Navigation", "Create", "View", "Help"]
+import {
+  CONTEXT_SHORTCUTS,
+  GROUP_ORDER,
+  SHORTCUTS,
+  comboParts,
+  type KeyCombo,
+} from "./shortcuts"
 
 export function ShortcutsHelp() {
   const open = useUiStore((s) => s.helpOpen)
@@ -23,7 +27,9 @@ export function ShortcutsHelp() {
       if (!map.has(s.group)) map.set(s.group, [])
       map.get(s.group)!.push(s)
     }
-    return GROUP_ORDER.filter((g) => map.has(g)).map((g) => [g, map.get(g)!] as const)
+    return GROUP_ORDER.filter((g) => map.has(g)).map(
+      (g) => [g, map.get(g)!] as const
+    )
   }, [])
 
   return (
@@ -34,6 +40,9 @@ export function ShortcutsHelp() {
           <DialogDescription>
             Drive Ledger entirely from the keyboard. Press{" "}
             <Kbd>Ctrl</Kbd>+<Kbd>K</Kbd> anywhere to open the command palette.
+            In a web browser, use <Kbd>Alt</Kbd>+<Kbd>N</Kbd> for a new journal
+            entry, because browsers keep <Kbd>Ctrl</Kbd>+<Kbd>N</Kbd> for
+            opening a new window.
           </DialogDescription>
         </DialogHeader>
 
@@ -55,22 +64,51 @@ export function ShortcutsHelp() {
                         <Icon className="size-4 text-muted-foreground" />
                         <span className="font-medium">{s.label}</span>
                       </span>
-                      <ShortcutKeys def={s} />
+                      <span className="flex items-center gap-2">
+                        <ShortcutKeys combo={s} />
+                        {s.alternate && (
+                          <>
+                            <span className="text-xs text-muted-foreground">or</span>
+                            <ShortcutKeys combo={s.alternate} />
+                          </>
+                        )}
+                      </span>
                     </li>
                   )
                 })}
               </ul>
             </div>
           ))}
+
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              In forms
+            </h3>
+            <ul className="space-y-1">
+              {CONTEXT_SHORTCUTS.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+                >
+                  <span>
+                    <span className="font-medium">{s.label}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {s.context}
+                    </span>
+                  </span>
+                  <ShortcutKeys combo={s} />
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   )
 }
 
-function ShortcutKeys({ def }: { def: (typeof SHORTCUTS)[number] }) {
-  const mac = formatKeys(def).includes("⌘")
-  const parts = formatKeys(def).split(mac ? "" : "+")
+function ShortcutKeys({ combo }: { combo: KeyCombo }) {
+  const parts = comboParts(combo)
   return (
     <span className="flex items-center gap-1">
       {parts.map((p, i) => (

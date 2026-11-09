@@ -36,28 +36,57 @@ import {
 import { useUiStore } from "@/lib/ui-store"
 import { EmptyState, LoadingBlock, PageHeader } from "./shared"
 
+const REPORT_TABS = [
+  "trial-balance",
+  "general-ledger",
+  "income-statement",
+  "balance-sheet",
+] as const
+
 /**
- * Registry of each report tab's export function. Each report registers its
- * export callback here on mount so the parent can fire it via the Ctrl+E
- * keyboard shortcut without prop-drilling.
+ * Export the active report when the Ctrl+E shortcut asks for it. Only the
+ * active tab is mounted, so whichever report calls this owns the request; it
+ * waits until its data has loaded so the PDF isn't empty.
  */
-const exportRegistry = new Map<string, () => void>()
+function useExportShortcut(ready: boolean, run: () => void) {
+  const pendingAction = useUiStore((s) => s.pendingAction)
+  const consumeAction = useUiStore((s) => s.consumeAction)
+  const { toast } = useToast()
+  const runRef = React.useRef(run)
+  // Keep the latest export callback (effects run in order, so this is
+  // up to date before the export effect below fires).
+  React.useEffect(() => {
+    runRef.current = run
+  })
+
+  React.useEffect(() => {
+    if (pendingAction !== "export-pdf" || !ready) return
+    consumeAction()
+    try {
+      runRef.current()
+      toast({ title: "PDF exported" })
+    } catch (err) {
+      toast({
+        title: "Export failed",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      })
+    }
+  }, [pendingAction, ready, consumeAction, toast])
+}
 
 export function ReportsView() {
-  const [tab, setTab] = React.useState("trial-balance")
+  const [tab, setTab] = React.useState<string>("trial-balance")
   const pendingAction = useUiStore((s) => s.pendingAction)
   const consumeAction = useUiStore((s) => s.consumeAction)
 
-  // Fire the active report's export when Ctrl+E requests it.
+  // Alt+1…4 open a specific report.
   React.useEffect(() => {
-    if (pendingAction === "export-pdf") {
-      consumeAction()
-      const fn = exportRegistry.get(tab)
-      if (fn) {
-        fn()
-      }
-    }
-  }, [pendingAction, tab, consumeAction])
+    if (!pendingAction?.startsWith("report:")) return
+    const id = pendingAction.slice("report:".length)
+    if ((REPORT_TABS as readonly string[]).includes(id)) setTab(id)
+    consumeAction()
+  }, [pendingAction, consumeAction])
 
   return (
     <div className="space-y-6">
@@ -146,13 +175,7 @@ function TrialBalanceReport() {
 
   const rows = data?.rows ?? []
 
-  // Register this report's export so Ctrl+E can trigger it.
-  React.useEffect(() => {
-    exportRegistry.set("trial-balance", () => exportTrialBalance(rows, dateLabel()))
-    return () => {
-      exportRegistry.delete("trial-balance")
-    }
-  }, [rows])
+  useExportShortcut(!isLoading, () => exportTrialBalance(rows, dateLabel()))
 
   if (isLoading) return <LoadingBlock label="Building trial balance…" />
 
@@ -277,14 +300,7 @@ function GeneralLedgerReport() {
 
   const ledgers = data?.ledgers ?? []
 
-  React.useEffect(() => {
-    exportRegistry.set("general-ledger", () =>
-      exportGeneralLedger(ledgers, dateLabel())
-    )
-    return () => {
-      exportRegistry.delete("general-ledger")
-    }
-  }, [ledgers])
+  useExportShortcut(!isLoading, () => exportGeneralLedger(ledgers, dateLabel()))
 
   if (isLoading) return <LoadingBlock label="Building general ledger…" />
 
@@ -394,17 +410,12 @@ function IncomeStatementReport() {
   const netIncome = is?.netIncome ?? 0
   const empty = revenue.length === 0 && expenses.length === 0
 
-  React.useEffect(() => {
-    exportRegistry.set("income-statement", () =>
-      exportIncomeStatement(
-        { revenue, expenses, totalRevenue, totalExpenses, netIncome },
-        dateLabel()
-      )
+  useExportShortcut(!isLoading, () =>
+    exportIncomeStatement(
+      { revenue, expenses, totalRevenue, totalExpenses, netIncome },
+      dateLabel()
     )
-    return () => {
-      exportRegistry.delete("income-statement")
-    }
-  }, [revenue, expenses, totalRevenue, totalExpenses, netIncome])
+  )
 
   if (isLoading) return <LoadingBlock label="Building income statement…" />
 
@@ -540,26 +551,21 @@ function BalanceSheetReport() {
   const empty =
     assets.length === 0 && liabilities.length === 0 && equity.length === 0
 
-  React.useEffect(() => {
-    exportRegistry.set("balance-sheet", () =>
-      exportBalanceSheet(
-        {
-          assets,
-          liabilities,
-          equity,
-          totalAssets,
-          totalLiabilities,
-          totalEquity,
-          netIncome,
-          balanced,
-        },
-        dateLabel()
-      )
+  useExportShortcut(!isLoading, () =>
+    exportBalanceSheet(
+      {
+        assets,
+        liabilities,
+        equity,
+        totalAssets,
+        totalLiabilities,
+        totalEquity,
+        netIncome,
+        balanced,
+      },
+      dateLabel()
     )
-    return () => {
-      exportRegistry.delete("balance-sheet")
-    }
-  }, [assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity, netIncome, balanced])
+  )
 
   if (isLoading) return <LoadingBlock label="Building balance sheet…" />
 

@@ -136,6 +136,32 @@ export function ChartOfAccountsView() {
     return map
   }, [accounts.data, journal.data])
 
+  // Export shortcuts: Ctrl+E (PDF, on this page) and Ctrl+Shift+E (CSV).
+  // Wait until accounts and balances have loaded so the export isn't empty.
+  React.useEffect(() => {
+    const pdf = pendingAction === "export-accounts-pdf"
+    const csv = pendingAction === "export-accounts-csv"
+    if (!pdf && !csv) return
+    if (!accounts.data || (pdf && !journal.data)) return
+    consumeAction()
+    const list = accounts.data
+    if (list.length === 0) {
+      toast({ title: "No accounts to export yet" })
+      return
+    }
+    if (pdf) {
+      exportChartOfAccounts(list, balances, todayISO())
+      toast({ title: "Chart of accounts exported to PDF" })
+    } else {
+      downloadText(
+        `chart-of-accounts-${todayISO()}.csv`,
+        accountsToCsv(list),
+        "text/csv;charset=utf-8"
+      )
+      toast({ title: `Exported ${list.length} accounts to CSV` })
+    }
+  }, [pendingAction, accounts.data, journal.data, balances, consumeAction, toast])
+
   function openCreate() {
     setEditing(null)
     setForm(EMPTY_FORM)

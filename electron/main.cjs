@@ -251,9 +251,14 @@ function buildMenu() {
         },
         { type: "separator" },
         {
-          label: "Export Report to PDF…",
+          label: "Export to PDF…",
           accelerator: "CmdOrCtrl+E",
           click: () => sendShortcut({ type: "export-pdf" }),
+        },
+        {
+          label: "Export Chart of Accounts to CSV…",
+          accelerator: "CmdOrCtrl+Shift+E",
+          click: () => sendShortcut({ type: "export-csv" }),
         },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
@@ -298,6 +303,31 @@ function buildMenu() {
           label: "Settings",
           accelerator: "CmdOrCtrl+5",
           click: () => sendShortcut({ type: "navigate", view: "settings" }),
+        },
+      ],
+    },
+    {
+      label: "Reports",
+      submenu: [
+        {
+          label: "Trial Balance",
+          accelerator: "Alt+1",
+          click: () => sendShortcut({ type: "report", report: "trial-balance" }),
+        },
+        {
+          label: "General Ledger",
+          accelerator: "Alt+2",
+          click: () => sendShortcut({ type: "report", report: "general-ledger" }),
+        },
+        {
+          label: "Income Statement",
+          accelerator: "Alt+3",
+          click: () => sendShortcut({ type: "report", report: "income-statement" }),
+        },
+        {
+          label: "Balance Sheet",
+          accelerator: "Alt+4",
+          click: () => sendShortcut({ type: "report", report: "balance-sheet" }),
         },
       ],
     },

@@ -12,7 +12,7 @@ Built with Next.js 16, React 19, Tailwind CSS, shadcn/ui and Electron.
 - **Journal Entries**: balanced debit/credit entries, plus one-click reversals
 - **Reports**: Trial Balance, General Ledger, Income Statement and Balance Sheet, with PDF export
 - **Dashboard**: a snapshot of your books at a glance
-- **Keyboard-driven**: command palette (`Ctrl+K`) and shortcuts for everything
+- **Keyboard-driven**: command palette (`Ctrl+K`) and shortcuts for new entries (`Ctrl+N`/`Alt+N`) and their lines (`Alt+L`), new accounts (`Ctrl+B`), reports (`Alt+1`–`Alt+4`) and export (`Ctrl+E` PDF, `Ctrl+Shift+E` CSV). Press `Ctrl+/` for the full list
 - **Light / dark theme**
 - **Storage**: a local JSON file by default, or connect Supabase or any PostgreSQL database from Settings
 

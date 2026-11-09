@@ -2,10 +2,9 @@
 
 import * as React from "react"
 import { useTheme } from "next-themes"
-import { useToast } from "@/hooks/use-toast"
 import { useNav } from "./nav"
 import { useUiStore } from "@/lib/ui-store"
-import { SHORTCUTS, type ShortcutAction } from "./shortcuts"
+import { SHORTCUTS, matchesCombo, type ShortcutAction } from "./shortcuts"
 
 /** Desktop bridge exposed by the Electron preload script. */
 interface DesktopBridge {
@@ -19,22 +18,20 @@ function getBridge(): DesktopBridge | undefined {
 }
 
 /**
- * Central keyboard-shortcut handler.
+ * Returns a function that performs a shortcut action. Shared by the keyboard
+ * handler, the desktop menu bridge and the command palette.
  *
- *  - In the browser (web preview) it listens to `keydown` on window.
- *  - In the Electron desktop app, the menu bar registers accelerators which
- *    Electron intercepts and forwards here via IPC — so we listen to the
- *    bridge instead and skip `keydown` to avoid double-firing.
+ * Actions that need a specific page navigate there and leave a "pending
+ * action" in the UI store, which that page consumes once its data is loaded.
  */
-export function useKeyboardShortcuts() {
-  const { setView } = useNav()
+export function useShortcutRunner() {
+  const { view, setView } = useNav()
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen)
   const setHelpOpen = useUiStore((s) => s.setHelpOpen)
   const requestAction = useUiStore((s) => s.requestAction)
   const { setTheme, resolvedTheme } = useTheme()
-  const { toast } = useToast()
 
-  const runAction = React.useCallback(
+  return React.useCallback(
     (action: ShortcutAction) => {
       switch (action.type) {
         case "navigate":
@@ -57,36 +54,54 @@ export function useKeyboardShortcuts() {
           setView("accounts")
           requestAction("new-account")
           break
-        case "export-pdf":
+        case "report":
           setView("reports")
-          requestAction("export-pdf")
+          requestAction(`report:${action.report}`)
+          break
+        case "export-pdf":
+          // On the chart of accounts, export that; otherwise the open report.
+          if (view === "accounts") {
+            requestAction("export-accounts-pdf")
+          } else {
+            setView("reports")
+            requestAction("export-pdf")
+          }
+          break
+        case "export-csv":
+          setView("accounts")
+          requestAction("export-accounts-csv")
           break
       }
     },
-    [setView, setPaletteOpen, setHelpOpen, requestAction, setTheme, resolvedTheme]
+    [view, setView, setPaletteOpen, setHelpOpen, requestAction, setTheme, resolvedTheme]
   )
+}
 
-  // Keyboard listener (browser / web preview). Skipped on desktop where the
-  // Electron menu handles accelerators and forwards via IPC.
+/**
+ * Central keyboard-shortcut handler.
+ *
+ *  - In the browser it listens to `keydown` on window.
+ *  - In the Electron desktop app the menu bar registers the primary
+ *    accelerators and forwards them here via IPC, so `keydown` only handles
+ *    the alternate combos (which aren't in the menu) to avoid double-firing.
+ */
+export function useKeyboardShortcuts() {
+  const runAction = useShortcutRunner()
+
   React.useEffect(() => {
-    if (getBridge()?.isDesktop) return
+    const desktop = !!getBridge()?.isDesktop
 
     function onKeyDown(e: KeyboardEvent) {
       // When the palette or help overlay is open, let them own the keyboard
       // (they handle Esc / arrows / Enter themselves).
       const ui = useUiStore.getState()
       if (ui.paletteOpen || ui.helpOpen) return
+      if (!(e.ctrlKey || e.metaKey || e.altKey)) return
 
-      const ctrl = e.ctrlKey || e.metaKey
-      if (!ctrl) return
-
-      const key = e.key.toLowerCase()
       const match = SHORTCUTS.find(
         (s) =>
-          s.ctrl === ctrl &&
-          s.key === key &&
-          !!s.shift === e.shiftKey &&
-          !!s.alt === e.altKey
+          (!desktop && matchesCombo(e, s)) ||
+          (s.alternate && matchesCombo(e, s.alternate))
       )
       if (!match) return
 
@@ -96,6 +111,7 @@ export function useKeyboardShortcuts() {
       const isTyping =
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
         target?.isContentEditable
       if (isTyping && match.action.type !== "palette") return
 
@@ -112,10 +128,6 @@ export function useKeyboardShortcuts() {
   React.useEffect(() => {
     const bridge = getBridge()
     if (!bridge?.onShortcut) return
-    const off = bridge.onShortcut((action) => runAction(action))
-    return off
+    return bridge.onShortcut((action) => runAction(action))
   }, [runAction])
-
-  // Keep `toast` referenced for future feedback without changing behaviour.
-  void toast
 }

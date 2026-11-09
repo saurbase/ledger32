@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useTheme } from "next-themes"
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,24 +11,19 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
-import { useNav } from "./nav"
 import { useUiStore } from "@/lib/ui-store"
-import { SHORTCUTS, formatKeys, type ShortcutAction } from "./shortcuts"
-
-const GROUP_ORDER: Record<string, number> = {
-  Navigation: 0,
-  Create: 1,
-  View: 2,
-  Help: 3,
-}
+import {
+  GROUP_ORDER,
+  SHORTCUTS,
+  formatKeys,
+  type ShortcutAction,
+} from "./shortcuts"
+import { useShortcutRunner } from "./use-shortcuts"
 
 export function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen)
   const setOpen = useUiStore((s) => s.setPaletteOpen)
-  const setHelpOpen = useUiStore((s) => s.setHelpOpen)
-  const requestAction = useUiStore((s) => s.requestAction)
-  const { setView } = useNav()
-  const { setTheme, resolvedTheme } = useTheme()
+  const runAction = useShortcutRunner()
   const [search, setSearch] = React.useState("")
 
   // Reset the search field every time the palette opens.
@@ -40,33 +34,9 @@ export function CommandPalette() {
   const run = React.useCallback(
     (action: ShortcutAction) => {
       setOpen(false)
-      switch (action.type) {
-        case "navigate":
-          setView(action.view)
-          break
-        case "palette":
-          break
-        case "help":
-          setHelpOpen(true)
-          break
-        case "theme":
-          setTheme(resolvedTheme === "dark" ? "light" : "dark")
-          break
-        case "new-entry":
-          setView("journal")
-          requestAction("new-entry")
-          break
-        case "new-account":
-          setView("accounts")
-          requestAction("new-account")
-          break
-        case "export-pdf":
-          setView("reports")
-          requestAction("export-pdf")
-          break
-      }
+      if (action.type !== "palette") runAction(action)
     },
-    [setOpen, setView, setHelpOpen, setTheme, resolvedTheme, requestAction]
+    [setOpen, runAction]
   )
 
   const groups = React.useMemo(() => {
@@ -76,7 +46,9 @@ export function CommandPalette() {
       map.get(s.group)!.push(s)
     }
     return Array.from(map.entries()).sort(
-      (a, b) => (GROUP_ORDER[a[0]] ?? 99) - (GROUP_ORDER[b[0]] ?? 99)
+      (a, b) =>
+        GROUP_ORDER.indexOf(a[0] as (typeof GROUP_ORDER)[number]) -
+        GROUP_ORDER.indexOf(b[0] as (typeof GROUP_ORDER)[number])
     )
   }, [])
 

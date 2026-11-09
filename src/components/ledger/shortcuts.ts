@@ -10,9 +10,20 @@ import {
   Command,
   Moon,
   FileDown,
+  FileSpreadsheet,
   Keyboard,
+  ListOrdered,
+  BookOpen,
+  TrendingUp,
+  Scale,
 } from "lucide-react"
 import type { ViewId } from "./nav"
+
+export type ReportId =
+  | "trial-balance"
+  | "general-ledger"
+  | "income-statement"
+  | "balance-sheet"
 
 export type ShortcutAction =
   | { type: "navigate"; view: ViewId }
@@ -21,26 +32,138 @@ export type ShortcutAction =
   | { type: "theme" }
   | { type: "new-entry" }
   | { type: "new-account" }
+  | { type: "report"; report: ReportId }
+  /** Export the current page as PDF: the open report, or the chart of accounts. */
   | { type: "export-pdf" }
+  /** Export the chart of accounts as CSV. */
+  | { type: "export-csv" }
 
-export interface ShortcutDef {
+/** A key combination. Ctrl means Cmd (⌘) on macOS. */
+export interface KeyCombo {
+  /** Lowercase key name, e.g. "1", "k", "/" */
+  key: string
+  ctrl?: boolean
+  shift?: boolean
+  alt?: boolean
+}
+
+export interface ShortcutDef extends KeyCombo {
   id: string
   label: string
   description: string
-  /** Lowercase key name, e.g. "1", "k", "/" */
-  key: string
-  /** Requires Ctrl (Win/Linux) or Cmd (Mac) */
-  ctrl: boolean
-  shift?: boolean
-  alt?: boolean
+  /**
+   * A second combination that also triggers the action, used where the
+   * primary one is reserved by browsers (e.g. Ctrl+N opens a new window in
+   * Chrome, so a page can never receive it).
+   */
+  alternate?: KeyCombo
   icon: React.ComponentType<{ className?: string }>
-  group: "Navigation" | "Create" | "View" | "Help"
+  group: "Navigation" | "Create" | "Reports" | "Export" | "View" | "Help"
   action: ShortcutAction
 }
 
-/** The canonical list of keyboard shortcuts. Shared by the hook, the command
- *  palette, the help overlay, and the Electron menu bar. */
+export const GROUP_ORDER: ShortcutDef["group"][] = [
+  "Create",
+  "Reports",
+  "Export",
+  "Navigation",
+  "View",
+  "Help",
+]
+
+/** The canonical list of keyboard shortcuts. Shared by the keyboard hook, the
+ *  command palette and the help overlay. Keep electron/main.cjs's menu in sync. */
 export const SHORTCUTS: ShortcutDef[] = [
+  // ---- Create ----
+  {
+    id: "new-entry",
+    label: "New Journal Entry",
+    description: "Create a new balanced double-entry",
+    key: "n",
+    ctrl: true,
+    alternate: { key: "n", alt: true },
+    icon: Plus,
+    group: "Create",
+    action: { type: "new-entry" },
+  },
+  {
+    id: "new-account",
+    label: "New Account",
+    description: "Add an account to the chart of accounts",
+    key: "b",
+    ctrl: true,
+    icon: Plus,
+    group: "Create",
+    action: { type: "new-account" },
+  },
+
+  // ---- Reports ----
+  {
+    id: "report-trial-balance",
+    label: "Trial Balance",
+    description: "Generate the trial balance",
+    key: "1",
+    alt: true,
+    icon: ListOrdered,
+    group: "Reports",
+    action: { type: "report", report: "trial-balance" },
+  },
+  {
+    id: "report-general-ledger",
+    label: "General Ledger",
+    description: "Generate the general ledger",
+    key: "2",
+    alt: true,
+    icon: BookOpen,
+    group: "Reports",
+    action: { type: "report", report: "general-ledger" },
+  },
+  {
+    id: "report-income-statement",
+    label: "Income Statement",
+    description: "Generate the income statement (profit & loss)",
+    key: "3",
+    alt: true,
+    icon: TrendingUp,
+    group: "Reports",
+    action: { type: "report", report: "income-statement" },
+  },
+  {
+    id: "report-balance-sheet",
+    label: "Balance Sheet",
+    description: "Generate the balance sheet",
+    key: "4",
+    alt: true,
+    icon: Scale,
+    group: "Reports",
+    action: { type: "report", report: "balance-sheet" },
+  },
+
+  // ---- Export ----
+  {
+    id: "export-pdf",
+    label: "Export to PDF",
+    description:
+      "Export the open report, or the chart of accounts when you're on that page",
+    key: "e",
+    ctrl: true,
+    icon: FileDown,
+    group: "Export",
+    action: { type: "export-pdf" },
+  },
+  {
+    id: "export-csv",
+    label: "Export Chart of Accounts to CSV",
+    description: "Download the chart of accounts as a CSV file",
+    key: "e",
+    ctrl: true,
+    shift: true,
+    icon: FileSpreadsheet,
+    group: "Export",
+    action: { type: "export-csv" },
+  },
+
+  // ---- Navigation ----
   {
     id: "go-dashboard",
     label: "Dashboard",
@@ -91,46 +214,8 @@ export const SHORTCUTS: ShortcutDef[] = [
     group: "Navigation",
     action: { type: "navigate", view: "settings" },
   },
-  {
-    id: "palette",
-    label: "Command Palette",
-    description: "Open the command palette to run any command",
-    key: "k",
-    ctrl: true,
-    icon: Command,
-    group: "Help",
-    action: { type: "palette" },
-  },
-  {
-    id: "new-entry",
-    label: "New Journal Entry",
-    description: "Create a new balanced double-entry",
-    key: "n",
-    ctrl: true,
-    icon: Plus,
-    group: "Create",
-    action: { type: "new-entry" },
-  },
-  {
-    id: "new-account",
-    label: "New Account",
-    description: "Add an account to the chart of accounts",
-    key: "b",
-    ctrl: true,
-    icon: Plus,
-    group: "Create",
-    action: { type: "new-account" },
-  },
-  {
-    id: "export-pdf",
-    label: "Export Report to PDF",
-    description: "Export the current report as a PDF file",
-    key: "e",
-    ctrl: true,
-    icon: FileDown,
-    group: "Create",
-    action: { type: "export-pdf" },
-  },
+
+  // ---- View / Help ----
   {
     id: "theme",
     label: "Toggle Theme",
@@ -140,6 +225,16 @@ export const SHORTCUTS: ShortcutDef[] = [
     icon: Moon,
     group: "View",
     action: { type: "theme" },
+  },
+  {
+    id: "palette",
+    label: "Command Palette",
+    description: "Open the command palette to run any command",
+    key: "k",
+    ctrl: true,
+    icon: Command,
+    group: "Help",
+    action: { type: "palette" },
   },
   {
     id: "help",
@@ -153,35 +248,72 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
 ]
 
+/**
+ * Shortcuts that only apply inside a specific form or dialog. They are
+ * handled by that component (so they work while typing in its fields) and
+ * listed in the help overlay.
+ */
+export interface ContextShortcut extends KeyCombo {
+  id: string
+  label: string
+  context: string
+}
+
+export const ADD_JOURNAL_LINE: ContextShortcut = {
+  id: "journal-add-line",
+  label: "Add line",
+  context: "New journal entry form",
+  key: "l",
+  alt: true,
+}
+
+export const CONTEXT_SHORTCUTS: ContextShortcut[] = [ADD_JOURNAL_LINE]
+
 /** Whether the current platform uses the Cmd key (⌘) convention. */
 export function isMac(): boolean {
   if (typeof navigator === "undefined") return false
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 }
 
-/** Human-readable combo, e.g. "⌘1" on Mac, "Ctrl+1" elsewhere. */
-export function formatKeys(s: ShortcutDef): string {
+/** The individual key labels of a combo, e.g. ["Ctrl", "Shift", "E"] or ["⌘", "E"]. */
+export function comboParts(c: KeyCombo): string[] {
   const mac = isMac()
   const parts: string[] = []
-  if (s.ctrl) parts.push(mac ? "⌘" : "Ctrl")
-  if (s.shift) parts.push(mac ? "⇧" : "Shift")
-  if (s.alt) parts.push(mac ? "⌥" : "Alt")
+  if (c.ctrl) parts.push(mac ? "⌘" : "Ctrl")
+  if (c.shift) parts.push(mac ? "⇧" : "Shift")
+  if (c.alt) parts.push(mac ? "⌥" : "Alt")
   // Single letters are uppercased for readability; symbols like "/" stay as-is.
-  parts.push(s.key.length === 1 && /[a-z]/.test(s.key) ? s.key.toUpperCase() : s.key)
-  return parts.join(mac ? "" : "+")
+  parts.push(c.key.length === 1 && /[a-z]/.test(c.key) ? c.key.toUpperCase() : c.key)
+  return parts
 }
 
-/** The accelerator string Electron expects, e.g. "CmdOrCtrl+1". */
-export function electronAccelerator(s: ShortcutDef): string {
-  const parts: string[] = ["CmdOrCtrl"]
-  if (s.shift) parts.push("Shift")
-  if (s.alt) parts.push("Alt")
-  parts.push(s.key.length === 1 && /[a-z]/.test(s.key) ? s.key.toUpperCase() : s.key)
-  return parts.join("+")
+/** Human-readable combo, e.g. "⌘1" on Mac, "Ctrl+1" elsewhere. */
+export function formatCombo(c: KeyCombo): string {
+  return comboParts(c).join(isMac() ? "" : "+")
 }
 
-/** Shortcut defs that should appear as menu items with accelerators in the
- *  desktop app. (Excludes "help" because it has its own menu entry.) */
-export const MENU_SHORTCUTS: ShortcutDef[] = SHORTCUTS
+/** Primary combo of a shortcut, as text. */
+export function formatKeys(s: ShortcutDef): string {
+  return formatCombo(s)
+}
+
+/**
+ * The logical key of a keyboard event. Uses `code` for letters and digits so
+ * combos still match when a modifier changes the produced character (e.g.
+ * Shift+1 → "!" or macOS Option+1 → "¡").
+ */
+function eventKey(e: KeyboardEvent): string {
+  const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code) ?? /^Key([A-Z])$/.exec(e.code)
+  return m ? m[1].toLowerCase() : e.key.toLowerCase()
+}
+
+export function matchesCombo(e: KeyboardEvent, c: KeyCombo): boolean {
+  return (
+    eventKey(e) === c.key &&
+    (e.ctrlKey || e.metaKey) === !!c.ctrl &&
+    e.shiftKey === !!c.shift &&
+    e.altKey === !!c.alt
+  )
+}
 
 export type { ViewId }

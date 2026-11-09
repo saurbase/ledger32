@@ -33,17 +33,24 @@ bar (with accelerator hints) and also work in the web preview.
 
 | Shortcut | Action |
 | --- | --- |
+| `Ctrl+N` (or `Alt+N`) | New journal entry (opens the Journal page and the form) |
+| `Alt+L` | Add a line (inside the New journal entry form; works while typing) |
+| `Ctrl+B` | New account (opens the Chart of Accounts page and the form) |
+| `Alt+1` | Generate the Trial Balance |
+| `Alt+2` | Generate the General Ledger |
+| `Alt+3` | Generate the Income Statement |
+| `Alt+4` | Generate the Balance Sheet |
+| `Ctrl+E` | Export to PDF: the open report, or the chart of accounts when you're on that page |
+| `Ctrl+Shift+E` | Export the chart of accounts to CSV |
 | `Ctrl+1`–`Ctrl+5` | Jump to Dashboard / Accounts / Journal / Reports / Settings |
 | `Ctrl+K` | Open the **command palette** (search & run any command) |
-| `Ctrl+N` | New journal entry (navigates + opens the form) |
-| `Ctrl+B` | New account (navigates + opens the form) |
-| `Ctrl+E` | Export the current report to PDF |
 | `Ctrl+J` | Toggle light / dark theme |
 | `Ctrl+/` | Show all keyboard shortcuts |
 
 > On macOS use `⌘` instead of `Ctrl`. The command palette (`Ctrl+K`) works
 > even while typing in a field; all other shortcuts are ignored inside inputs
-> so they don't hijack data entry.
+> so they don't hijack data entry. In a web browser `Ctrl+N` is reserved
+> for opening a new window, so use `Alt+N` there.
 
 The same shortcuts appear in the menu bar: **File** (New / Export), **Go**
 (navigation), **View** (palette / theme), **Help** (shortcuts).

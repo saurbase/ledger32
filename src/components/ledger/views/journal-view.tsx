@@ -47,6 +47,11 @@ import {
   todayISO,
 } from "@/lib/types"
 import { ConfirmDialog } from "@/components/ledger/confirm-dialog"
+import {
+  ADD_JOURNAL_LINE,
+  formatCombo,
+  matchesCombo,
+} from "@/components/ledger/shortcuts"
 import { useUiStore } from "@/lib/ui-store"
 import { EmptyState, LoadingBlock, PageHeader } from "./shared"
 
@@ -87,11 +92,18 @@ export function JournalView() {
 
   // Open the New Entry dialog when a global shortcut (Ctrl+N) requests it.
   React.useEffect(() => {
-    if (pendingAction === "new-entry" && accountOptions.length >= 2) {
+    if (pendingAction !== "new-entry" || !accounts.data) return
+    consumeAction()
+    if (accountOptions.length >= 2) {
       setFormOpen(true)
-      consumeAction()
+    } else {
+      toast({
+        title: "Add accounts first",
+        description:
+          "A journal entry needs at least two accounts. Press Ctrl+B to add one.",
+      })
     }
-  }, [pendingAction, accountOptions.length, consumeAction])
+  }, [pendingAction, accounts.data, accountOptions.length, consumeAction, toast])
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -435,8 +447,33 @@ function NewEntryDialog({
     updateLine(key, value ? { credit: value, debit: "" } : { credit: value })
   }
 
+  const formRef = React.useRef<HTMLFormElement>(null)
+  const [focusLineKey, setFocusLineKey] = React.useState<string | null>(null)
+
   function addLine() {
-    setLines((prev) => [...prev, newLine()])
+    const line = newLine()
+    setLines((prev) => [...prev, line])
+    setFocusLineKey(line.key)
+  }
+
+  // Move focus to the new line's account picker so entry can continue from
+  // the keyboard.
+  React.useEffect(() => {
+    if (!focusLineKey) return
+    const el = formRef.current?.querySelector<HTMLElement>(
+      `[data-line-key="${focusLineKey}"]`
+    )
+    el?.focus()
+    el?.scrollIntoView({ block: "nearest" })
+    setFocusLineKey(null)
+  }, [focusLineKey, lines])
+
+  // Alt+L adds a line, even while typing in one of the form's fields.
+  function onFormKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
+    if (matchesCombo(e.nativeEvent, ADD_JOURNAL_LINE)) {
+      e.preventDefault()
+      addLine()
+    }
   }
 
   function removeLine(key: string) {
@@ -493,7 +530,12 @@ function NewEntryDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          onKeyDown={onFormKeyDown}
+          className="space-y-4"
+        >
           <DialogHeader>
             <DialogTitle>New journal entry</DialogTitle>
             <DialogDescription>
@@ -541,8 +583,12 @@ function NewEntryDialog({
                 variant="outline"
                 size="sm"
                 onClick={addLine}
+                title={`Add line (${formatCombo(ADD_JOURNAL_LINE)})`}
               >
                 <Plus className="size-4" /> Add line
+                <kbd className="ml-1 hidden rounded border bg-muted px-1 font-mono text-[10px] text-muted-foreground sm:inline">
+                  {formatCombo(ADD_JOURNAL_LINE)}
+                </kbd>
               </Button>
             </div>
 
@@ -562,7 +608,7 @@ function NewEntryDialog({
                         updateLine(l.key, { accountId: v })
                       }
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" data-line-key={l.key}>
                         <SelectValue placeholder="Select account" />
                       </SelectTrigger>
                       <SelectContent>

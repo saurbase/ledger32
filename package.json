@@ -2,6 +2,7 @@
   "name": "ledger",
   "version": "1.0.0",
   "private": true,
+  "trustedDependencies": ["electron"],
   "description": "Ledger — minimal double-entry bookkeeping desktop & web app",
   "author": "Ledger",
   "main": "electron/main.cjs",
@@ -17,7 +18,8 @@
     "electron": "electron .",
     "electron:dev": "electron .",
     "electron:build": "bun run build && electron-builder --linux",
-    "electron:build:dir": "bun run build && electron-builder --linux --dir"
+    "electron:build:dir": "bun run build && electron-builder --linux --dir",
+    "electron:build:win": "bun run build && electron-builder --win"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -114,8 +116,10 @@
     },
     "files": [
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/**/*"
     ],
+    "npmRebuild": false,
     "extraResources": [
       {
         "from": ".next/standalone",
@@ -127,7 +131,7 @@
         "AppImage",
         "deb"
       ],
-      "icon": "build/icon.png",
+      "icon": "electron/icon.png",
       "category": "Office",
       "maintainer": "Ledger <ledger@example.com>"
     },
@@ -147,6 +151,19 @@
     },
     "appImage": {
       "artifactName": "Ledger-${version}-${arch}.AppImage"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "electron/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Ledger-Setup-${version}-${arch}.exe"
     }
   }
 }

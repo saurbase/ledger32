@@ -40,8 +40,8 @@ bar (with accelerator hints) and also work in the web preview.
 | `Alt+2` | Generate the General Ledger |
 | `Alt+3` | Generate the Income Statement |
 | `Alt+4` | Generate the Balance Sheet |
-| `Ctrl+E` | Export to PDF: the open report, or the chart of accounts when you're on that page |
-| `Ctrl+Shift+E` | Export the chart of accounts to CSV |
+| `Ctrl+E` | Export to PDF: the open report, the chart of accounts, or the journal (whichever page you're on) |
+| `Ctrl+Shift+E` | Export to CSV: the journal on the Journal page, otherwise the chart of accounts |
 | `Ctrl+1`–`Ctrl+5` | Jump to Dashboard / Accounts / Journal / Reports / Settings |
 | `Ctrl+K` | Open the **command palette** (search & run any command) |
 | `Ctrl+J` | Toggle light / dark theme |

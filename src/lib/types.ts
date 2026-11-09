@@ -69,6 +69,28 @@ export interface NewAccount {
   description?: string | null;
 }
 
+/** A journal entry read from an import file; accounts are given by code. */
+export interface ImportJournalEntry {
+  /** How the entry is identified in the file (its "Entry" value or row). */
+  label: string;
+  date: string;
+  description: string;
+  reference?: string | null;
+  lines: {
+    accountCode: string;
+    debit: number;
+    credit: number;
+    description?: string | null;
+  }[];
+}
+
+export interface JournalImportResult {
+  created: number;
+  /** Entries skipped because an identical entry already exists. */
+  skipped: number;
+  errors: { entry: string; error: string }[];
+}
+
 export interface AccountImportResult {
   created: number;
   updated: number;

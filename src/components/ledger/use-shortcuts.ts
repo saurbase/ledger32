@@ -59,17 +59,25 @@ export function useShortcutRunner() {
           requestAction(`report:${action.report}`)
           break
         case "export-pdf":
-          // On the chart of accounts, export that; otherwise the open report.
+          // Export what's on screen: the chart of accounts, the journal, or
+          // (from any other page) the open report.
           if (view === "accounts") {
             requestAction("export-accounts-pdf")
+          } else if (view === "journal") {
+            requestAction("export-journal-pdf")
           } else {
             setView("reports")
             requestAction("export-pdf")
           }
           break
         case "export-csv":
-          setView("accounts")
-          requestAction("export-accounts-csv")
+          // The journal on the Journal page; the chart of accounts elsewhere.
+          if (view === "journal") {
+            requestAction("export-journal-csv")
+          } else {
+            setView("accounts")
+            requestAction("export-accounts-csv")
+          }
           break
       }
     },

@@ -2,7 +2,9 @@ import { getBackend, getBackendInfo } from "@/lib/backends";
 import {
   Account,
   AccountImportResult,
+  ImportJournalEntry,
   JournalEntry,
+  JournalImportResult,
   JournalLine,
   NewAccount,
   NewJournalEntry,
@@ -26,6 +28,7 @@ export const store = {
   listJournalEntries,
   getJournalEntry,
   createJournalEntry,
+  importJournalEntries,
   deleteJournalEntry,
   reverseJournalEntry,
   resetAll,
@@ -147,6 +150,89 @@ async function importAccounts(
       result.errors.push({
         row: rowNo,
         code: input.code || undefined,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return result;
+}
+
+/** Identity of an entry's content, used to spot duplicates on import. */
+function entrySignature(e: {
+  date: string;
+  description: string;
+  reference?: string | null;
+  lines: { accountId: string; debit: number; credit: number }[];
+}): string {
+  const lines = e.lines
+    .map((l) => `${l.accountId}:${round2(l.debit || 0)}:${round2(l.credit || 0)}`)
+    .sort()
+    .join(",");
+  return [e.date, e.description.trim(), (e.reference ?? "").trim(), lines].join("|");
+}
+
+/**
+ * Bulk-import journal entries (e.g. from a CSV file). Accounts are matched by
+ * code. Each entry is validated and saved independently. With
+ * `skipDuplicates`, entries identical to an existing one (same date,
+ * description, reference and lines) are skipped, so re-importing a file is safe.
+ */
+async function importJournalEntries(
+  entries: ImportJournalEntry[],
+  skipDuplicates = true
+): Promise<JournalImportResult> {
+  const result: JournalImportResult = { created: 0, skipped: 0, errors: [] };
+  const accounts = await listAccounts();
+  const byCode = new Map(accounts.map((a) => [a.code.toLowerCase(), a]));
+  // How many copies of each entry the books held before this import. A file
+  // entry is a duplicate only while unmatched copies remain, so re-importing
+  // a file is a no-op but genuinely repeated entries within a file are kept.
+  const existing = new Map<string, number>();
+  if (skipDuplicates) {
+    for (const e of await listJournalEntries()) {
+      const sig = entrySignature(e);
+      existing.set(sig, (existing.get(sig) ?? 0) + 1);
+    }
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const raw = entries[i];
+    const label = String(raw?.label ?? i + 1);
+    try {
+      if (!raw || !Array.isArray(raw.lines)) throw new Error("Invalid entry");
+      const unknown = raw.lines
+        .map((l) => String(l.accountCode ?? "").trim())
+        .filter((c) => !byCode.has(c.toLowerCase()));
+      if (unknown.length)
+        throw new Error(
+          `Unknown account code${unknown.length > 1 ? "s" : ""}: ${[...new Set(unknown)].join(", ")}`
+        );
+      const input: NewJournalEntry = {
+        date: String(raw.date ?? ""),
+        description: String(raw.description ?? "").trim(),
+        reference: raw.reference ? String(raw.reference).trim() || null : null,
+        lines: raw.lines.map((l) => ({
+          accountId: byCode.get(String(l.accountCode).trim().toLowerCase())!.id,
+          debit: Number(l.debit) || 0,
+          credit: Number(l.credit) || 0,
+          description: l.description ? String(l.description) : null,
+        })),
+      };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date))
+        throw new Error(`Invalid date "${input.date}" (use YYYY-MM-DD)`);
+
+      const sig = entrySignature(input);
+      const copies = existing.get(sig) ?? 0;
+      if (copies > 0) {
+        existing.set(sig, copies - 1);
+        result.skipped++;
+        continue;
+      }
+      await createJournalEntry(input); // validates balance etc.
+      result.created++;
+    } catch (err) {
+      result.errors.push({
+        entry: label,
         error: err instanceof Error ? err.message : String(err),
       });
     }

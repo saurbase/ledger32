@@ -8,6 +8,8 @@ import type { ConnectionCheck } from "@/lib/backends/types";
 import type {
   Account,
   AccountImportResult,
+  ImportJournalEntry,
+  JournalImportResult,
   BalanceSheet,
   IncomeStatement,
   JournalEntry,
@@ -77,6 +79,11 @@ export const api = {
     }),
   deleteJournal: (id: string) =>
     request<{ deleted: boolean }>(`/api/journal/${id}`, { method: "DELETE" }),
+  importJournal: (entries: ImportJournalEntry[], skipDuplicates: boolean) =>
+    request<JournalImportResult>("/api/journal/import", {
+      method: "POST",
+      body: JSON.stringify({ entries, skipDuplicates }),
+    }),
   reverseJournal: (id: string) =>
     request<JournalEntry>(`/api/journal/${id}/reverse`, { method: "POST" }),
 

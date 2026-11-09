@@ -54,6 +54,7 @@ import {
 } from "@/components/ledger/shortcuts"
 import { useUiStore } from "@/lib/ui-store"
 import { EmptyState, LoadingBlock, PageHeader } from "./shared"
+import { JournalTransferActions } from "./journal-transfer"
 
 interface LineForm {
   key: string
@@ -161,12 +162,15 @@ export function JournalView() {
         title="Journal Entries"
         description="Every transaction is a balanced double-entry — debits must equal credits."
         actions={
-          <Button
-            onClick={() => setFormOpen(true)}
-            disabled={accountOptions.length < 2}
-          >
-            <Plus className="size-4" /> New entry
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <JournalTransferActions accounts={accountOptions} entries={entries} />
+            <Button
+              onClick={() => setFormOpen(true)}
+              disabled={accountOptions.length < 2}
+            >
+              <Plus className="size-4" /> New entry
+            </Button>
+          </div>
         }
       />
 

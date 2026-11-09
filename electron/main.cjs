@@ -256,7 +256,7 @@ function buildMenu() {
           click: () => sendShortcut({ type: "export-pdf" }),
         },
         {
-          label: "Export Chart of Accounts to CSV…",
+          label: "Export to CSV…",
           accelerator: "CmdOrCtrl+Shift+E",
           click: () => sendShortcut({ type: "export-csv" }),
         },

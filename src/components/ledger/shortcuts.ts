@@ -144,7 +144,7 @@ export const SHORTCUTS: ShortcutDef[] = [
     id: "export-pdf",
     label: "Export to PDF",
     description:
-      "Export the open report, or the chart of accounts when you're on that page",
+      "Export the page you're on: the open report, the chart of accounts, or the journal",
     key: "e",
     ctrl: true,
     icon: FileDown,
@@ -153,8 +153,9 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: "export-csv",
-    label: "Export Chart of Accounts to CSV",
-    description: "Download the chart of accounts as a CSV file",
+    label: "Export to CSV",
+    description:
+      "Download the journal (on the Journal page) or the chart of accounts as CSV",
     key: "e",
     ctrl: true,
     shift: true,

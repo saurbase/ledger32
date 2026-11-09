@@ -6,7 +6,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, type DataSourceInput } from "@/lib/api-client";
-import type { NewAccount, NewJournalEntry } from "@/lib/types";
+import type {
+  ImportJournalEntry,
+  NewAccount,
+  NewJournalEntry,
+} from "@/lib/types";
 
 export const qk = {
   accounts: ["accounts"] as const,
@@ -111,6 +115,20 @@ export function useImportAccounts() {
       accounts: NewAccount[];
       mode: "update" | "skip";
     }) => api.importAccounts(accounts, mode),
+    onSuccess: inv,
+  });
+}
+
+export function useImportJournal() {
+  const inv = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({
+      entries,
+      skipDuplicates,
+    }: {
+      entries: ImportJournalEntry[];
+      skipDuplicates: boolean;
+    }) => api.importJournal(entries, skipDuplicates),
     onSuccess: inv,
   });
 }

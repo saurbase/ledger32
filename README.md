@@ -9,7 +9,7 @@ Built with Next.js 16, React 19, Tailwind CSS, shadcn/ui and Electron.
 ## Features
 
 - **Chart of Accounts**: assets, liabilities, equity, revenue and expenses, each with an optional description; export to PDF or CSV and import from CSV
-- **Journal Entries**: balanced debit/credit entries, plus one-click reversals
+- **Journal Entries**: balanced debit/credit entries, plus one-click reversals; export to PDF or CSV and import from CSV
 - **Reports**: Trial Balance, General Ledger, Income Statement and Balance Sheet, with PDF export
 - **Dashboard**: a snapshot of your books at a glance
 - **Keyboard-driven**: command palette (`Ctrl+K`) and shortcuts for new entries (`Ctrl+N`/`Alt+N`) and their lines (`Alt+L`), new accounts (`Ctrl+B`), reports (`Alt+1`–`Alt+4`) and export (`Ctrl+E` PDF, `Ctrl+Shift+E` CSV). Press `Ctrl+/` for the full list
@@ -122,6 +122,7 @@ The UI talks to a small REST API under `/api`:
 | `GET/POST /api/journal`, `DELETE /api/journal/:id` | Journal entries |
 | `POST /api/journal/:id/reverse` | Reverse an entry |
 | `POST /api/accounts/import` | Bulk-import accounts: `{ accounts: [...], mode }` where mode is `"update"` (default) or `"skip"` |
+| `POST /api/journal/import` | Bulk-import journal entries: `{ entries: [...], skipDuplicates }`; lines reference accounts by `accountCode` |
 | `GET /api/reports/:type` | `trial-balance`, `general-ledger`, `income-statement`, `balance-sheet`, `summary` |
 | `POST /api/seed` | Load a sample chart of accounts |
 | `POST /api/reset` | Clear all data |
@@ -189,3 +190,23 @@ On **Chart of Accounts**, use **Import → Download CSV template** to get a star
 | Description | no | Free text |
 
 Before anything is saved, you get a preview listing any invalid rows. If a code already exists, you choose whether to update that account or keep it as it is. A file exported with **Export → Export as CSV** can be imported back unchanged. PDF exports are for printing and sharing only; they can't be imported.
+
+## Importing journal entries (CSV)
+
+On **Journal Entries**, use **Import → Download CSV template** to get a starter file, or **Export → Export as CSV** to see the format with your own data. The file has **one row per line** of an entry:
+
+| Column | Required | Notes |
+|---|---|---|
+| Entry | recommended | Rows with the same value form one journal entry (e.g. `1`, `1`, `2`, `2`). Without this column, rows are grouped by date + reference + description |
+| Date | yes | `YYYY-MM-DD`. Only needed on the entry's first row |
+| Reference | no | e.g. `INV-001` |
+| Description | yes | Only needed on the entry's first row |
+| Account Code | yes | Must exist in the chart of accounts; import the chart of accounts first if needed |
+| Account Name | no | Ignored on import (for readability only) |
+| Debit / Credit | yes | One of them per row; plain numbers such as `1200` or `1,200.00` |
+| Memo | no | Line description |
+| Reversal | no | Informational only |
+
+Each entry must balance (debits = credits) and have at least two lines. The preview lists entries with problems before anything is saved; each valid entry is saved on its own. With **Skip entries that already exist** (on by default), an entry whose date, description, reference and lines match one already in the books is skipped. That makes it safe to import the same file twice, while genuinely repeated entries are still imported.
+
+Reversal entries are imported as ordinary entries, so balances stay correct but they're no longer linked to the entry they reversed. PDF exports are for printing and sharing; they can't be imported.

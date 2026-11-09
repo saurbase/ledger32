@@ -6,6 +6,7 @@ import {
   formatMoney,
   round2,
   type Account,
+  type JournalEntry,
   type BalanceSheet,
   type IncomeStatement,
 } from "@/lib/types";
@@ -421,4 +422,104 @@ export function exportChartOfAccounts(
 
   footer(doc);
   doc.save(`chart-of-accounts-${dateLabel}.pdf`);
+}
+
+export function exportJournal(
+  entries: JournalEntry[],
+  accounts: Account[],
+  dateLabel: string
+) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const sorted = [...entries].sort((a, b) =>
+    a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1
+  );
+  const range = sorted.length
+    ? `${sorted[0].date} to ${sorted[sorted.length - 1].date}`
+    : "No entries";
+  let y = header(
+    doc,
+    "Journal",
+    `${sorted.length} entr${sorted.length === 1 ? "y" : "ies"} · ${range}`
+  );
+
+  const columnStyles = {
+    0: { cellWidth: 18 },
+    1: { cellWidth: 55 },
+    2: { textColor: GRAY },
+    3: { halign: "right" as const, cellWidth: 30 },
+    4: { halign: "right" as const, cellWidth: 30 },
+  };
+  const styles = { font: "helvetica" as const, fontSize: 8.5, cellPadding: 2, overflow: "linebreak" as const };
+  const ROW_MM = 7; // approximate row height, used to keep entries on one page
+
+  let grandDebit = 0;
+  let grandCredit = 0;
+  sorted.forEach((e, i) => {
+    // Start a new page rather than splitting an entry across pages.
+    const needed = (e.lines.length + 1) * ROW_MM + (i === 0 ? ROW_MM : 0);
+    if (i > 0 && y + needed > pageHeight - 20) {
+      doc.addPage();
+      y = 20;
+    }
+    const title = [
+      `#${i + 1}`,
+      e.date,
+      e.reference,
+      e.description,
+      e.isReversal ? "(reversal)" : e.isReversed ? "(reversed)" : "",
+    ]
+      .filter(Boolean)
+      .join("  ·  ");
+    const body: any[] = [
+      [{ content: title, colSpan: 5, styles: { fontStyle: "bold", fillColor: LIGHT, textColor: BLACK } }],
+    ];
+    for (const l of e.lines) {
+      const a = byId.get(l.accountId);
+      grandDebit += l.debit || 0;
+      grandCredit += l.credit || 0;
+      body.push([
+        a?.code ?? "",
+        a?.name ?? "(deleted account)",
+        l.description ?? "",
+        l.debit ? money(l.debit) : "",
+        l.credit ? money(l.credit) : "",
+      ]);
+    }
+    autoTable(doc, {
+      startY: y,
+      // Column headings at the top of each page only.
+      head: i === 0 || y === 20 ? [["Code", "Account", "Memo", "Debit", "Credit"]] : undefined,
+      body,
+      styles,
+      headStyles: { fillColor: BLACK, textColor: 255, fontStyle: "bold", halign: "left" },
+      columnStyles,
+      margin: { left: 14, right: 14 },
+      didParseCell: (data) => {
+        if (data.section === "head" && data.column.index >= 3) data.cell.styles.halign = "right";
+      },
+    });
+    y = (doc as any).lastAutoTable.finalY + 2;
+  });
+
+  // Grand totals at the end only.
+  if (y > pageHeight - 30) {
+    doc.addPage();
+    y = 20;
+  }
+  autoTable(doc, {
+    startY: y + 2,
+    body: [[
+      { content: "Totals", colSpan: 3, styles: { halign: "right" } },
+      money(round2(grandDebit)),
+      money(round2(grandCredit)),
+    ]],
+    styles: { ...styles, fontStyle: "bold", fillColor: LIGHT, textColor: BLACK },
+    columnStyles,
+    margin: { left: 14, right: 14 },
+  });
+
+  footer(doc);
+  doc.save(`journal-${dateLabel}.pdf`);
 }

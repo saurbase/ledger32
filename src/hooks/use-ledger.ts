@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, type DataSourceInput } from "@/lib/api-client";
 import type { NewAccount, NewJournalEntry } from "@/lib/types";
 
 export const qk = {
@@ -53,6 +53,19 @@ export function useStatus() {
   return useQuery({ queryKey: qk.status, queryFn: api.status });
 }
 
+export function useDataSource() {
+  return useQuery({ queryKey: ["datasource"], queryFn: api.getDataSource });
+}
+
+/** Save & switch data source, then refetch everything from the new backend. */
+export function useSaveDataSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DataSourceInput) => api.saveDataSource(input),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
@@ -84,6 +97,20 @@ export function useDeleteAccount() {
   const inv = useInvalidateAll();
   return useMutation({
     mutationFn: (id: string) => api.deleteAccount(id),
+    onSuccess: inv,
+  });
+}
+
+export function useImportAccounts() {
+  const inv = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({
+      accounts,
+      mode,
+    }: {
+      accounts: NewAccount[];
+      mode: "update" | "skip";
+    }) => api.importAccounts(accounts, mode),
     onSuccess: inv,
   });
 }

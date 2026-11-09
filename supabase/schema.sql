@@ -10,9 +10,13 @@ create table if not exists public.accounts (
   name        text not null,
   type        text not null check (type in ('asset','liability','equity','revenue','expense')),
   subtype     text,
+  description text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- Upgrade path for databases created before account descriptions existed.
+alter table public.accounts add column if not exists description text;
 
 create table if not exists public.journal_entries (
   id                 uuid primary key default gen_random_uuid(),

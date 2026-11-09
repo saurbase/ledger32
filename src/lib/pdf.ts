@@ -1,8 +1,11 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
+  ACCOUNT_TYPES,
+  ACCOUNT_TYPE_LABELS,
   formatMoney,
   round2,
+  type Account,
   type BalanceSheet,
   type IncomeStatement,
 } from "@/lib/types";
@@ -357,4 +360,65 @@ export function exportGeneralLedger(ledgers: LedgerForExport[], dateLabel: strin
 
   footer(doc);
   doc.save(`general-ledger-${dateLabel}.pdf`);
+}
+
+export function exportChartOfAccounts(
+  accounts: Account[],
+  balances: Map<string, number>,
+  dateLabel: string
+) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const top = header(
+    doc,
+    "Chart of Accounts",
+    `${accounts.length} account${accounts.length === 1 ? "" : "s"} · As of ${dateLabel}`
+  );
+
+  // One section row per account type, followed by its accounts.
+  const body: any[] = [];
+  for (const type of ACCOUNT_TYPES) {
+    const items = accounts
+      .filter((a) => a.type === type)
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+    if (items.length === 0) continue;
+    const total = round2(items.reduce((s, a) => s + (balances.get(a.id) ?? 0), 0));
+    body.push([
+      {
+        content: `${ACCOUNT_TYPE_LABELS[type]} (${items.length})`,
+        colSpan: 4,
+        styles: { fontStyle: "bold", fillColor: LIGHT, textColor: BLACK },
+      },
+      {
+        content: money(total),
+        styles: { fontStyle: "bold", fillColor: LIGHT, textColor: BLACK, halign: "right" },
+      },
+    ]);
+    for (const a of items) {
+      body.push([
+        a.code,
+        a.name,
+        a.subtype ?? "",
+        a.description ?? "",
+        money(balances.get(a.id) ?? 0),
+      ]);
+    }
+  }
+
+  autoTable(doc, {
+    startY: top,
+    head: [["Code", "Account", "Subtype", "Description", "Balance"]],
+    body,
+    styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2.2, overflow: "linebreak" },
+    headStyles: { fillColor: BLACK, textColor: 255, fontStyle: "bold", halign: "left" },
+    columnStyles: {
+      0: { cellWidth: 18 },
+      1: { cellWidth: 42 },
+      2: { cellWidth: 30, textColor: GRAY },
+      3: { textColor: GRAY },
+      4: { halign: "right", cellWidth: 28 },
+    },
+  });
+
+  footer(doc);
+  doc.save(`chart-of-accounts-${dateLabel}.pdf`);
 }

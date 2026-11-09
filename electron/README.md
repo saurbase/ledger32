@@ -15,7 +15,7 @@ bun run electron     # opens the desktop window
 `bun run electron` does the right thing automatically:
 
 1. It checks whether the Next.js dev server is already running on
-   `http://localhost:3000`.
+   `http://127.0.0.1:11891`.
 2. If not, it spawns `bun run dev` for you and waits for it to be ready.
 3. It then opens a native `BrowserWindow` showing the app.
 
@@ -96,15 +96,11 @@ ledger
 | Mode        | Local JSON store location                            |
 | ----------- | --------------------------------------------------- |
 | Development | `<project>/data/ledger.json`                        |
-| Packaged    | `~/.config/Ledger/ledger.json` (XDG user-data dir)  |
+| Packaged    | `%APPDATA%\Ledger\ledger.json` (Windows), `~/.config/Ledger/ledger.json` (Linux) |
 
-When you connect Supabase (via `.env` / the Settings screen) data is stored
-in your Supabase project instead.
-
-> Note: in the packaged AppImage, `.env` is read from the user-data
-> directory. The simplest path is to use the in-app **Settings → Data
-> source** flow or set `NEXT_PUBLIC_SUPABASE_URL` /
-> `SUPABASE_SERVICE_ROLE_KEY` in the environment before launching.
+To store data in **Supabase** or a **PostgreSQL** database instead, use
+**Settings → Data source** in the app. The connection settings are saved as
+`config.json` in the same folder as `ledger.json`.
 
 ## Files
 
@@ -120,7 +116,7 @@ build/
 ## Troubleshooting
 
 - **Blank window / "Could not reach Next.js"** — make sure nothing else is
-  using port 3000, then relaunch. Electron logs the Next.js server output
+  using port 11891, then relaunch. Electron logs the Next.js server output
   inline, prefixed with `[next]`.
 - **AppImage won't run** — on some distros you need FUSE:
   `sudo apt install libfuse2`.

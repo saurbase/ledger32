@@ -4,7 +4,7 @@
 // Wraps the Next.js app in a native desktop window.
 //
 // Strategy:
-//  - If a Next.js server is already reachable at http://localhost:3000, use it.
+//  - If a Next.js server is already reachable at http://127.0.0.1:11891, use it.
 //  - Otherwise, spawn `bun run dev` (or `npx next dev`) and wait for it.
 //  - Then open a BrowserWindow pointed at the app.
 //
@@ -18,7 +18,8 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 
-const DEV_URL = process.env.LEDGER_URL || "http://localhost:3000";
+const PORT = process.env.LEDGER_PORT || "11891";
+const DEV_URL = process.env.LEDGER_URL || `http://127.0.0.1:${PORT}`;
 const PROJECT_ROOT = path.join(__dirname, "..");
 
 /** Child process for the Next.js dev server, if we started it ourselves. */
@@ -53,7 +54,7 @@ function resolveServerCommand() {
   if (fs.existsSync(path.join(PROJECT_ROOT, "bun.lock"))) {
     return { cmd: "bun", args: ["run", "dev"], cwd: PROJECT_ROOT };
   }
-  return { cmd: "npx", args: ["next", "dev", "-p", "3000"], cwd: PROJECT_ROOT };
+  return { cmd: "npx", args: ["next", "dev", "-p", PORT], cwd: PROJECT_ROOT };
 }
 
 function isServerUp(url = DEV_URL) {
@@ -78,14 +79,20 @@ function spawnDevServer() {
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
-      PORT: "3000",
+      PORT,
+      // Bind to loopback only. Next.js standalone reads HOSTNAME, which on
+      // Windows is often the machine name, making localhost unreachable.
+      HOSTNAME: "127.0.0.1",
       // In a packaged app, persist the local JSON store in the OS user-data
       // folder (the app bundle is read-only).
       LEDGER_DATA_DIR: app.isPackaged ? app.getPath("userData") : undefined,
       // Electron's runtime satisfies Node for the standalone server.
       ELECTRON_RUN_AS_NODE: app.isPackaged ? "1" : undefined,
     },
-    shell: process.platform === "win32",
+    // A shell is only needed in dev on Windows to resolve `bun`/`npx` shims.
+    // In the packaged app we spawn the Electron executable directly: going
+    // through cmd.exe would split paths such as "C:\Program Files\Ledger".
+    shell: !app.isPackaged && process.platform === "win32",
   });
   child.stdout.on("data", (d) =>
     process.stdout.write(`[next] ${d.toString().trimEnd()}\n`)
@@ -168,6 +175,22 @@ function createWindow() {
       }, 4500);
     });
   }
+
+  // Show an explanatory page instead of a blank window if the app can't load.
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_e, code, desc, url, isMainFrame) => {
+      if (!isMainFrame || code === -3 /* ERR_ABORTED */) return;
+      const html = `<body style="font-family:system-ui;padding:40px;color:#222">
+        <h2>Ledger could not start</h2>
+        <p>The local server at <code>${DEV_URL}</code> did not respond
+        (${desc}).</p>
+        <p>Make sure no other program is using that port, then restart Ledger.</p>
+        </body>`;
+      mainWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+      if (!mainWindow.isVisible()) mainWindow.show();
+    }
+  );
 
   mainWindow.loadURL(DEV_URL).catch((err) => {
     console.error("[electron] Failed to load app:", err);

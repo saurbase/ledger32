@@ -1,11 +1,31 @@
 import type {
+  BackendKind,
+  ConfigSource,
+  DataSourceConfig,
+  MaskedConfig,
+} from "@/lib/config";
+import type { ConnectionCheck } from "@/lib/backends/types";
+import type {
   Account,
+  AccountImportResult,
   BalanceSheet,
   IncomeStatement,
   JournalEntry,
   NewAccount,
   NewJournalEntry,
 } from "@/lib/types";
+
+export type { BackendKind, ConfigSource, ConnectionCheck, MaskedConfig };
+
+/** Data-source settings sent from the Settings form (empty secret = keep stored). */
+export type DataSourceInput = DataSourceConfig;
+
+export interface StatusResponse {
+  backend: BackendKind;
+  source: ConfigSource;
+  usingSupabase: boolean;
+  timestamp: string;
+}
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -42,6 +62,11 @@ export const api = {
     }),
   deleteAccount: (id: string) =>
     request<{ deleted: boolean }>(`/api/accounts/${id}`, { method: "DELETE" }),
+  importAccounts: (accounts: NewAccount[], mode: "update" | "skip") =>
+    request<AccountImportResult>("/api/accounts/import", {
+      method: "POST",
+      body: JSON.stringify({ accounts, mode }),
+    }),
 
   // Journal
   listJournal: () => request<JournalEntry[]>("/api/journal"),
@@ -88,6 +113,26 @@ export const api = {
   // Bulk
   reset: () => request<{ reset: boolean }>("/api/reset", { method: "POST" }),
   seed: () => request<{ seeded: boolean }>("/api/seed", { method: "POST" }),
-  status: () =>
-    request<{ usingSupabase: boolean; timestamp: string }>("/api/status"),
+  status: () => request<StatusResponse>("/api/status"),
+
+  // Data source settings
+  getDataSource: () =>
+    request<{ config: MaskedConfig; source: ConfigSource }>(
+      "/api/settings/datasource"
+    ),
+  testDataSource: (input: DataSourceInput) =>
+    request<ConnectionCheck>("/api/settings/datasource/test", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  initDataSourceSchema: (input: DataSourceInput) =>
+    request<ConnectionCheck>("/api/settings/datasource/init-schema", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  saveDataSource: (input: DataSourceInput) =>
+    request<{ backend: BackendKind; source: ConfigSource; message: string }>(
+      "/api/settings/datasource",
+      { method: "PUT", body: JSON.stringify(input) }
+    ),
 };

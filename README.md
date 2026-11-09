@@ -8,13 +8,13 @@ Built with Next.js 16, React 19, Tailwind CSS, shadcn/ui and Electron.
 
 ## Features
 
-- **Chart of Accounts**: assets, liabilities, equity, revenue and expenses
+- **Chart of Accounts**: assets, liabilities, equity, revenue and expenses, each with an optional description; export to PDF or CSV and import from CSV
 - **Journal Entries**: balanced debit/credit entries, plus one-click reversals
 - **Reports**: Trial Balance, General Ledger, Income Statement and Balance Sheet, with PDF export
 - **Dashboard**: a snapshot of your books at a glance
 - **Keyboard-driven**: command palette (`Ctrl+K`) and shortcuts for everything
 - **Light / dark theme**
-- **Storage**: a local JSON file by default; you can optionally sync to Supabase
+- **Storage**: a local JSON file by default, or connect Supabase or any PostgreSQL database from Settings
 
 ## Download
 
@@ -51,13 +51,13 @@ bun install
 ### Run the web app
 
 ```bash
-bun run dev                 # http://localhost:3000
+bun run dev                 # http://localhost:11891
 ```
 
-If port 3000 is already taken (for example by a WSL service), use another port:
+If port 11891 is already taken, use another port:
 
 ```bash
-bunx next dev -p 3010
+bunx next dev -p 12000
 ```
 
 ### Run the desktop app
@@ -66,36 +66,37 @@ bunx next dev -p 3010
 bun run electron
 ```
 
-Electron reuses a dev server already running on `http://localhost:3000`. If none is running, it starts `bun run dev` itself. To point it at a server on another port:
+Electron reuses a dev server already running on `http://127.0.0.1:11891`. If none is running, it starts `bun run dev` itself. To point it at a server on another port:
 
 ```bash
 # bash
-LEDGER_URL=http://localhost:3010 bunx electron .
+LEDGER_URL=http://127.0.0.1:12000 bunx electron .
 # PowerShell
-$env:LEDGER_URL="http://localhost:3010"; bunx electron .
+$env:LEDGER_URL="http://127.0.0.1:12000"; bunx electron .
 ```
 
 See [electron/README.md](electron/README.md) for keyboard shortcuts and other desktop details.
 
 ## Data storage
 
-| Mode | Where data lives |
-|---|---|
-| Web / dev | `./data/ledger.json` |
-| Installed desktop app | the OS user-data folder (e.g. `%APPDATA%\Ledger` on Windows, `~/.config/Ledger` on Linux) |
-| Supabase (optional) | your Supabase project |
+Choose where data is stored in **Settings → Data source**. You don't need to edit any project files.
 
-To use Supabase:
+| Data source | Where data lives | Setup |
+|---|---|---|
+| **Local file** (default) | `ledger.json` in the data folder: `./data` in dev, the OS user-data folder for the desktop app (`%APPDATA%\Ledger` on Windows, `~/.config/Ledger` on Linux) | None |
+| **Supabase** | Your Supabase project | Project URL + `service_role` key (Supabase → Project Settings → API) |
+| **PostgreSQL** | Any PostgreSQL server (self-hosted, RDS, Neon, Supabase's database, …) | Host, port, database, user, password, SSL; or paste a `postgresql://…` connection string |
 
-1. Run [`supabase/schema.sql`](supabase/schema.sql) in your project's SQL editor.
-2. Create a `.env` file in the project root:
+How it works:
 
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
-   ```
+- **Test connection** checks the credentials and whether the Ledger tables exist. Nothing is saved until **Save & switch** succeeds.
+- **PostgreSQL:** if the tables are missing, click **Create tables**. It runs the schema for you and is safe to run again; it also upgrades older databases.
+- **Supabase:** if the tables are missing, click **Copy SQL** and run it in the Supabase SQL editor (or run [`supabase/schema.sql`](supabase/schema.sql)).
+- **Storage of settings:** they are saved in `config.json` next to `ledger.json`, readable only by your user account. Keys and passwords are never sent back to the browser. Leave a secret field blank to keep the stored value.
+- **Switching doesn't move data.** Each data source keeps its own accounts and entries. To carry your chart of accounts over, export it as CSV and import it after switching.
+- **Backwards compatible:** `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` in `.env` still work when nothing has been saved in Settings. Settings take precedence once saved.
 
-3. Restart the app. The header badge changes from **Local store** to Supabase.
+> **Security note:** the app has no login. Anyone who can open it can change the data source, so don't expose the web version publicly without putting authentication in front of it.
 
 `.env` and `data/` are gitignored.
 
@@ -103,7 +104,7 @@ To use Supabase:
 
 | Command | Description |
 |---|---|
-| `bun run dev` | Next.js dev server on port 3000 |
+| `bun run dev` | Next.js dev server on port 11891 |
 | `bun run build` | Production build (standalone server in `.next/standalone`) |
 | `bun run start` | Run the production build |
 | `bun run lint` | ESLint |
@@ -120,10 +121,14 @@ The UI talks to a small REST API under `/api`:
 | `GET/POST/DELETE /api/accounts`, `PUT/DELETE /api/accounts/:id` | Chart of accounts |
 | `GET/POST /api/journal`, `DELETE /api/journal/:id` | Journal entries |
 | `POST /api/journal/:id/reverse` | Reverse an entry |
+| `POST /api/accounts/import` | Bulk-import accounts: `{ accounts: [...], mode }` where mode is `"update"` (default) or `"skip"` |
 | `GET /api/reports/:type` | `trial-balance`, `general-ledger`, `income-statement`, `balance-sheet`, `summary` |
 | `POST /api/seed` | Load a sample chart of accounts |
 | `POST /api/reset` | Clear all data |
-| `GET /api/status` | Storage backend in use (local vs Supabase) |
+| `GET /api/status` | Data source in use (`local`, `supabase` or `postgres`) |
+| `GET/PUT /api/settings/datasource` | Read (secrets masked) or save the data source; saving tests the connection first |
+| `POST /api/settings/datasource/test` | Test connection settings without saving |
+| `POST /api/settings/datasource/init-schema` | Create or upgrade the Ledger tables in PostgreSQL |
 
 ## CI/CD
 
@@ -159,13 +164,28 @@ src/
   app/                 Next.js app router (page + /api routes)
   components/ledger/   App shell and views (dashboard, accounts, journal, reports, settings)
   components/ui/       shadcn/ui components
-  lib/                 Store (local JSON / Supabase), accounting logic, helpers
+  lib/                 Store (accounting rules), config, CSV/PDF helpers
+  lib/backends/        Storage backends: local JSON file, Supabase, PostgreSQL
 electron/              Electron main + preload process, app icon
-supabase/schema.sql    Database schema for the optional Supabase backend
+supabase/schema.sql    Database schema for the Supabase / PostgreSQL backends
 .github/workflows/     CI pipeline that builds and publishes the installers
 ```
 
 ## Known limitations
 
-- The installed desktop app serves its UI on a fixed port (3000). If another service already answers on that port, the app connects to it instead of starting its own server.
+- The desktop app serves its UI on port 11891 (loopback only). If another service already answers on that port, the app connects to it instead of starting its own server.
 - Installers are not code-signed.
+
+## Importing a chart of accounts (CSV)
+
+On **Chart of Accounts**, use **Import → Download CSV template** to get a starter file, then **Import → Import from CSV…**. The file needs these columns (the header row is required; column order doesn't matter):
+
+| Column | Required | Notes |
+|---|---|---|
+| Code | yes | Unique account code, e.g. `1010` |
+| Name | yes | Account name |
+| Type | yes | `asset`, `liability`, `equity`, `revenue` or `expense` (also accepts `Assets`, `Income`, `Expenses`, …) |
+| Subtype | no | e.g. `Current Asset` |
+| Description | no | Free text |
+
+Before anything is saved, you get a preview listing any invalid rows. If a code already exists, you choose whether to update that account or keep it as it is. A file exported with **Export → Export as CSV** can be imported back unchanged. PDF exports are for printing and sharing only; they can't be imported.

@@ -10,6 +10,7 @@ import {
   Menu,
   Database,
   HardDrive,
+  Server,
   Command,
 } from "lucide-react"
 
@@ -288,23 +289,39 @@ function KbdHint({ children }: { children: React.ReactNode }) {
 
 function DataSourceBadge({ variant = "compact" }: { variant?: "compact" | "full" }) {
   const { data } = useStatus()
-  const usingSupabase = data?.usingSupabase ?? false
-  const Icon = usingSupabase ? Database : HardDrive
-  const label = usingSupabase ? "Supabase" : "Local store"
+  const { setView } = useNav()
+  const backend = data?.backend ?? "local"
+  const { Icon, label, detail } = {
+    local: {
+      Icon: HardDrive,
+      label: "Local store",
+      detail: "Connect a database in Settings",
+    },
+    supabase: {
+      Icon: Database,
+      label: "Supabase",
+      detail: "Connected to your Supabase project",
+    },
+    postgres: {
+      Icon: Server,
+      label: "PostgreSQL",
+      detail: "Connected to your PostgreSQL database",
+    },
+  }[backend]
 
   if (variant === "full") {
     return (
-      <div className="flex items-start gap-2 rounded-md border bg-background px-3 py-2 text-xs">
+      <button
+        type="button"
+        onClick={() => setView("settings")}
+        className="flex w-full items-start gap-2 rounded-md border bg-background px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50"
+      >
         <Icon className="mt-0.5 size-3.5 shrink-0 text-primary" />
         <div className="min-w-0">
           <div className="font-medium text-foreground">{label}</div>
-          <div className="text-muted-foreground">
-            {usingSupabase
-              ? "Connected to your Supabase project"
-              : "Add Supabase keys to .env to sync"}
-          </div>
+          <div className="text-muted-foreground">{detail}</div>
         </div>
-      </div>
+      </button>
     )
   }
 

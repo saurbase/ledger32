@@ -34,6 +34,7 @@ export interface Account {
   name: string;
   type: AccountType;
   subtype?: string | null;
+  description?: string | null;
   createdAt: string;
 }
 
@@ -65,6 +66,14 @@ export interface NewAccount {
   name: string;
   type: AccountType;
   subtype?: string | null;
+  description?: string | null;
+}
+
+export interface AccountImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; code?: string; error: string }[];
 }
 
 export interface NewJournalLine {

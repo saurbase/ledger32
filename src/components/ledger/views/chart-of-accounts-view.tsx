@@ -1,7 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { BookText, Pencil, Plus, Trash2 } from "lucide-react"
+import {
+  BookText,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,8 +24,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -29,10 +46,19 @@ import {
   useAccounts,
   useCreateAccount,
   useDeleteAccount,
+  useImportAccounts,
   useJournal,
   useUpdateAccount,
 } from "@/hooks/use-ledger"
 import { accountBalance } from "@/lib/reports"
+import {
+  accountCsvTemplate,
+  accountsToCsv,
+  csvToAccounts,
+  downloadText,
+  type ParsedAccounts,
+} from "@/lib/csv"
+import { exportChartOfAccounts } from "@/lib/pdf"
 import {
   ACCOUNT_TYPES,
   ACCOUNT_TYPE_LABELS,
@@ -40,6 +66,7 @@ import {
   formatMoney,
   NewAccount,
   round2,
+  todayISO,
 } from "@/lib/types"
 import { ConfirmDialog } from "@/components/ledger/confirm-dialog"
 import { useUiStore } from "@/lib/ui-store"
@@ -50,6 +77,7 @@ interface FormState {
   name: string
   type: AccountType
   subtype: string
+  description: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -57,6 +85,14 @@ const EMPTY_FORM: FormState = {
   name: "",
   type: "asset",
   subtype: "",
+  description: "",
+}
+
+/** A parsed CSV waiting for the user to confirm the import. */
+interface PendingImport extends ParsedAccounts {
+  fileName: string
+  /** How many rows match an existing account code. */
+  existingCount: number
 }
 
 export function ChartOfAccountsView() {
@@ -65,7 +101,14 @@ export function ChartOfAccountsView() {
   const createMut = useCreateAccount()
   const updateMut = useUpdateAccount()
   const deleteMut = useDeleteAccount()
+  const importMut = useImportAccounts()
   const { toast } = useToast()
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const [pendingImport, setPendingImport] =
+    React.useState<PendingImport | null>(null)
+  const [importMode, setImportMode] = React.useState<"update" | "skip">(
+    "update"
+  )
 
   const [open, setOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<string | null>(null)
@@ -108,8 +151,98 @@ export function ChartOfAccountsView() {
       name: a.name,
       type: a.type,
       subtype: a.subtype ?? "",
+      description: a.description ?? "",
     })
     setOpen(true)
+  }
+
+  // ---- Export ---------------------------------------------------------------
+
+  function onExportCsv() {
+    const list = accounts.data ?? []
+    downloadText(
+      `chart-of-accounts-${todayISO()}.csv`,
+      accountsToCsv(list),
+      "text/csv;charset=utf-8"
+    )
+    toast({ title: `Exported ${list.length} accounts to CSV` })
+  }
+
+  function onExportPdf() {
+    exportChartOfAccounts(accounts.data ?? [], balances, todayISO())
+  }
+
+  function onDownloadTemplate() {
+    downloadText(
+      "chart-of-accounts-template.csv",
+      accountCsvTemplate(),
+      "text/csv;charset=utf-8"
+    )
+  }
+
+  // ---- Import ---------------------------------------------------------------
+
+  async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = "" // allow re-selecting the same file
+    if (!file) return
+    if (!/\.csv$/i.test(file.name) && file.type !== "text/csv") {
+      toast({
+        title: "Unsupported file",
+        description: "Please choose a .csv file. PDF files can't be imported.",
+        variant: "destructive",
+      })
+      return
+    }
+    const text = await file.text()
+    const parsed = csvToAccounts(text)
+    const codes = new Set(
+      (accounts.data ?? []).map((a) => a.code.toLowerCase())
+    )
+    setImportMode("update")
+    setPendingImport({
+      ...parsed,
+      fileName: file.name,
+      existingCount: parsed.accounts.filter((a) =>
+        codes.has(a.code.toLowerCase())
+      ).length,
+    })
+  }
+
+  async function onConfirmImport() {
+    if (!pendingImport || pendingImport.accounts.length === 0) return
+    try {
+      const r = await importMut.mutateAsync({
+        accounts: pendingImport.accounts,
+        mode: importMode,
+      })
+      const parts = [
+        r.created && `${r.created} created`,
+        r.updated && `${r.updated} updated`,
+        r.skipped && `${r.skipped} skipped`,
+        r.errors.length && `${r.errors.length} failed`,
+      ].filter(Boolean)
+      toast({
+        title: "Import finished",
+        description:
+          (parts.join(", ") || "Nothing to import") +
+          (r.errors.length
+            ? ". " +
+              r.errors
+                .slice(0, 3)
+                .map((x) => `${x.code ?? `#${x.row}`}: ${x.error}`)
+                .join("; ")
+            : ""),
+        variant: r.errors.length ? "destructive" : undefined,
+      })
+      setPendingImport(null)
+    } catch (err) {
+      toast({
+        title: "Import failed",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      })
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -119,6 +252,7 @@ export function ChartOfAccountsView() {
       name: form.name.trim(),
       type: form.type,
       subtype: form.subtype.trim() || null,
+      description: form.description.trim() || null,
     }
     try {
       if (editing) {
@@ -170,9 +304,49 @@ export function ChartOfAccountsView() {
         title="Chart of Accounts"
         description="All ledger accounts organised by type."
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="size-4" /> Add account
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={onFileChosen}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="size-4" /> Import
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                  <FileSpreadsheet className="size-4" /> Import from CSV…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onDownloadTemplate}>
+                  <Download className="size-4" /> Download CSV template
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={list.length === 0}>
+                  <Download className="size-4" /> Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={onExportPdf}>
+                  <FileText className="size-4" /> Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onExportCsv}>
+                  <FileSpreadsheet className="size-4" /> Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={openCreate}>
+              <Plus className="size-4" /> Add account
+            </Button>
+          </div>
         }
       />
 
@@ -243,8 +417,16 @@ export function ChartOfAccountsView() {
                               <td className="px-4 py-2.5 font-mono text-xs md:px-6">
                                 {a.code}
                               </td>
-                              <td className="px-4 py-2.5 font-medium md:px-6">
-                                {a.name}
+                              <td className="px-4 py-2.5 md:px-6">
+                                <div className="font-medium">{a.name}</div>
+                                {a.description && (
+                                  <div
+                                    className="mt-0.5 max-w-md truncate text-xs text-muted-foreground"
+                                    title={a.description}
+                                  >
+                                    {a.description}
+                                  </div>
+                                )}
                               </td>
                               <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell md:px-6">
                                 {a.subtype || "—"}
@@ -362,6 +544,20 @@ export function ChartOfAccountsView() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Description (optional)</Label>
+              <Textarea
+                id="description"
+                placeholder="What this account is used for, e.g. cash on hand and petty cash"
+                rows={3}
+                maxLength={500}
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+              />
+            </div>
+
             <DialogFooter>
               <Button
                 type="button"
@@ -378,6 +574,113 @@ export function ChartOfAccountsView() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV import preview / confirm */}
+      <Dialog
+        open={pendingImport !== null}
+        onOpenChange={(o) => !o && setPendingImport(null)}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import chart of accounts</DialogTitle>
+            <DialogDescription>
+              {pendingImport?.fileName}: {pendingImport?.accounts.length ?? 0}{" "}
+              valid row{pendingImport?.accounts.length === 1 ? "" : "s"}
+              {pendingImport?.errors.length
+                ? `, ${pendingImport.errors.length} with problems`
+                : ""}
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingImport && pendingImport.errors.length > 0 && (
+            <div className="max-h-32 overflow-y-auto rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs scroll-thin">
+              <div className="mb-1 font-medium text-destructive">
+                These rows will be ignored:
+              </div>
+              <ul className="space-y-0.5">
+                {pendingImport.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.row > 0 ? `Row ${e.row}: ` : ""}
+                    {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {pendingImport && pendingImport.accounts.length > 0 && (
+            <div className="max-h-64 overflow-auto rounded-md border scroll-thin">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-muted">
+                  <tr className="text-left text-muted-foreground">
+                    <th className="px-3 py-1.5 font-medium">Code</th>
+                    <th className="px-3 py-1.5 font-medium">Name</th>
+                    <th className="px-3 py-1.5 font-medium">Type</th>
+                    <th className="px-3 py-1.5 font-medium">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingImport.accounts.map((a, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="px-3 py-1.5 font-mono">{a.code}</td>
+                      <td className="px-3 py-1.5">{a.name}</td>
+                      <td className="px-3 py-1.5">
+                        {ACCOUNT_TYPE_LABELS[a.type]}
+                      </td>
+                      <td className="max-w-[16rem] truncate px-3 py-1.5 text-muted-foreground">
+                        {a.description ?? ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {pendingImport && pendingImport.existingCount > 0 && (
+            <div className="space-y-1.5">
+              <Label htmlFor="import-mode">
+                {pendingImport.existingCount} code
+                {pendingImport.existingCount === 1 ? " already exists" : "s already exist"}
+                . What should happen to them?
+              </Label>
+              <Select
+                value={importMode}
+                onValueChange={(v) => setImportMode(v as "update" | "skip")}
+              >
+                <SelectTrigger id="import-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="update">
+                    Update existing accounts with the file&apos;s values
+                  </SelectItem>
+                  <SelectItem value="skip">
+                    Keep existing accounts, only add new ones
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingImport(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={onConfirmImport}
+              disabled={
+                importMut.isPending || !pendingImport?.accounts.length
+              }
+            >
+              <Upload className="size-4" />
+              Import {pendingImport?.accounts.length ?? 0} account
+              {pendingImport?.accounts.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
